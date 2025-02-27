@@ -6,9 +6,6 @@
 /vendor/
 /node_modules/
 
-# Ignore user-uploaded files
-/uploads/*
-
 # Ignore system-generated files
 .DS_Store
 Thumbs.db
