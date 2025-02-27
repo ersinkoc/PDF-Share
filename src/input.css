@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+.sidebar-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 z-20 transition-opacity duration-300;
+}
+
+/* Sidebar transitions */
+.sidebar-enter-active,
+.sidebar-leave-active {
+    @apply transition-all duration-300 ease-in-out;
+}
+
+.sidebar-enter-from,
+.sidebar-leave-to {
+    @apply -translate-x-full;
+}
+
+.sidebar-enter-to,
+.sidebar-leave-from {
+    @apply translate-x-0;
+}
+
+/* Responsive content adjustments */
+@media (min-width: 768px) {
+    .content-with-sidebar {
+        @apply ml-0 md:ml-64;
+    }
+    
+    /* Ensure sidebar is behind content on larger screens when not pinned */
+    aside {
+        @apply z-20;
+    }
+    
+    /* Main content should have higher z-index than sidebar when sidebar is not pinned */
+    main, header {
+        @apply z-30;
+    }
+}
+
+/* Mobile specific styles */
+@media (max-width: 767px) {
+    aside {
+        @apply z-40;
+    }
+    
+    main, header {
+        @apply z-10;
+    }
+}
+
+/* Pin icon styling */
+.bi-pin-angle, .bi-pin-angle-fill {
+    @apply text-lg;
+}

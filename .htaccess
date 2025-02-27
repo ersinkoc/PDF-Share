@@ -1,0 +1,90 @@
+# Enable rewrite engine
+RewriteEngine On
+
+# Set base directory - değiştirin bunu kendi path'inize göre
+RewriteBase /
+
+# Allow direct access to cache directory for QR codes
+RewriteRule ^cache/ - [L]
+
+# Allow direct access to assets directory
+RewriteRule ^assets/ - [L]
+
+# Allow direct access to uploads directory
+RewriteRule ^uploads/ - [L]
+
+# Prevent direct access to includes directory
+RewriteRule ^includes/ - [F,L]
+
+# Prevent direct access to db directory
+RewriteRule ^db/ - [F,L]
+
+# Prevent direct access to logs directory
+RewriteRule ^logs/ - [F,L]
+
+# Prevent direct access to PHP files in uploads directory
+RewriteRule ^uploads/.*\.php$ - [F,L]
+
+# Handle short URLs
+RewriteRule ^s/([a-zA-Z0-9]+)$ index.php?short_url=$1 [L,QSA]
+
+# Directly serve existing files
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Directly serve existing directories
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route all other requests to index.php
+RewriteRule ^ index.php [L]
+
+# Custom error pages
+ErrorDocument 404 /404.php
+ErrorDocument 403 /404.php
+ErrorDocument 500 /404.php
+
+# Protect .htaccess file
+<Files .htaccess>
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Protect sensitive files
+<FilesMatch "^(\.env|\.git|composer\.json|composer\.lock|package\.json|package-lock\.json)">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Disable directory listing
+Options -Indexes
+
+# PHP settings - Apache mod_php
+<IfModule mod_php.c>
+    php_flag display_errors off
+    php_value upload_max_filesize 50M
+    php_value post_max_size 50M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# PHP settings - Apache mod_php7
+<IfModule mod_php7.c>
+    php_flag display_errors off
+    php_value upload_max_filesize 50M
+    php_value post_max_size 50M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# PHP settings - Apache mod_php8
+<IfModule mod_php8.c>
+    php_flag display_errors off
+    php_value upload_max_filesize 50M
+    php_value post_max_size 50M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# Alternative PHP settings for other configurations (e.g., PHP-FPM)
+# If you're using PHP-FPM, you need to configure these settings in php.ini or pool configuration

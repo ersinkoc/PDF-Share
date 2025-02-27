@@ -1,0 +1,65 @@
+# Ignore environment files
+.env
+.env.*
+
+# Ignore log files
+/logs/*
+
+# Ignore cache directories
+/cache/*
+
+# Ignore dependency directories
+/vendor/
+/node_modules/
+
+# Ignore user-uploaded files
+/uploads/*
+
+# Ignore system-generated files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore local configuration files
+/config.local.php
+
+# Ignore composer files
+composer.lock
+composer.phar
+
+# Ignore temporary files
+/tmp/*
+
+# Ignore database backups
+*.sql
+*.sqlite
+
+# Ignore build files
+/build/
+
+# Ignore test coverage reports
+/coverage/
+
+# Ignore error logs
+*.log
+
+# Ignore compiled assets
+/assets/css/*
+/assets/js/*
+
+# Ignore package manager files
+package-lock.json
+yarn.lock
+
+# Ignore OS generated files
+**/.DS_Store
+**/Thumbs.db
+
+# Ignore development tools
+.phpunit.result.cache
+.php-cs-fixer.cache
