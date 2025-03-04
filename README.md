@@ -1,106 +1,177 @@
 # PDF QR Link
 
-A lightweight PHP application for uploading, sharing, and tracking PDF documents through QR codes and short URLs.
+A modern PHP application for managing, sharing, and tracking PDF documents with QR codes and short URLs.
 
 ## Overview
 
-PDF QR Link allows you to:
-- Upload PDF documents
-- Generate QR codes and short URLs for easy sharing
-- Track view and download statistics
-- Manage documents through an admin interface
+PDF QR Link is a comprehensive document management system that enables:
+- Secure PDF document storage and management
+- Automatic QR code generation for easy sharing
+- Short URL creation for convenient access
+- Detailed analytics and tracking
+- Cloud storage integration (S3/MinIO)
 
-## Features
+## Key Features
 
-- **PDF Management**
-  - Upload single or multiple PDF files
-  - Automatic QR code generation
-  - Short URL creation for easy sharing
-  
-- **Statistics**
-  - Track document views and downloads
-  - View detailed access logs
-  
-- **Admin Dashboard**
-  - Comprehensive document management
-  - Import/export functionality
-  - Database backup and restore
-  - System settings configuration
-  
-- **Security**
-  - Admin authentication
-  - Session management
-  - Secure file handling
+### Document Management
+- Upload and manage PDF documents
+- Automatic QR code generation
+- Short URL creation
+- Document versioning
+- Bulk upload support
+- Document categorization
 
-## Requirements
+### Cloud Storage
+- Amazon S3 integration
+- MinIO support
+- Automatic backups
+- Storage synchronization
+- Configurable retention policies
 
-- PHP 7.4 or higher
-- Write permissions for the following directories:
+### Security
+- Role-based access control
+- Secure file handling
+- Session management
+- Activity logging
+- IP-based access control
+- CSRF protection
+
+### Analytics & Tracking
+- View and download statistics
+- Access logs with IP tracking
+- User engagement metrics
+- Export reports (CSV/JSON)
+- Custom date range filtering
+
+### Admin Dashboard
+- Intuitive user interface
+- Document management
+- User administration
+- System configuration
+- Backup management
+- Import/export functionality
+
+## Technical Requirements
+
+- PHP 8.0 or higher
+- SQLite 3
+- Required PHP Extensions:
+  - PDO SQLite
+  - GD or Imagick
+  - ZIP
+  - JSON
+  - FileInfo
+- Write permissions for:
   - `/database`
   - `/uploads`
+  - `/backups`
   - `/cache`
   - `/logs`
 
 ## Installation
 
-1. Copy all files to your web server
-2. Ensure the required directories have write permissions
-3. Access the site through your web browser
-4. Log in to the admin panel at `/admin` with:
+1. Clone or download the repository
+2. Ensure all required directories have write permissions:
+   ```bash
+   chmod 755 database uploads backups cache logs
+   ```
+3. Access the application through your web browser
+4. Log in to the admin panel at `/admin` using:
    - Username: `admin`
    - Password: `admin123`
-5. Configure system settings as needed
+5. Configure system settings in the admin panel
 
-No additional configuration or database setup is required. The system uses SQLite and will initialize the database automatically on first use.
+The application uses SQLite and will automatically initialize the database on first use.
 
-## Usage
-
-### Uploading PDF Files
-
-1. Log in to the admin panel
-2. Navigate to "Upload PDF" or "Bulk Upload"
-3. Select the file(s) to upload
-4. The system will generate a QR code and short URL automatically
-
-### Sharing Documents
-
-Share documents using either:
-- The generated QR code (can be printed or embedded)
-- The short URL (easy to share via email or messaging)
-
-### Viewing Statistics
-
-1. Log in to the admin panel
-2. Navigate to "Documents" to see an overview
-3. Click on a specific document to view detailed statistics
-4. Access "Logs" for more detailed access information
-
-## Administration
-
-### Data Management
-
-- **Import/Export**: Transfer documents between systems
-- **Database Backup**: Create backups of your database
-- **Reset Database**: Reset the system to its initial state (use with caution)
+## Configuration
 
 ### System Settings
+- General settings (site title, description)
+- Upload limits and restrictions
+- QR code customization
+- Security parameters
+- Email notifications
+- Storage settings
 
-Configure various system parameters:
-- Storage limits
-- QR code size
-- Security settings
-- Site title and description
+### Cloud Storage Setup
+1. Access S3 settings in admin panel
+2. Configure:
+   - Provider (S3/MinIO)
+   - Endpoint
+   - Access credentials
+   - Bucket settings
+   - SSL verification
+   - Path style options
 
-## Security Notes
+## Usage Guide
 
-- Change the default admin password immediately after installation
-- Regularly backup your database
-- Restrict access to the admin area
+### Document Management
+1. Upload documents via admin panel
+2. System automatically generates:
+   - QR code
+   - Short URL
+   - Preview (if enabled)
+3. Share using QR code or URL
+4. Track usage in analytics
 
-## License
+### Backup Management
+1. Configure backup settings
+2. Schedule automatic backups
+3. Choose storage location:
+   - Local storage
+   - Cloud storage (S3/MinIO)
+4. Set retention policies
 
-This project is available for use under open-source terms.
+### Analytics
+1. Access statistics dashboard
+2. View:
+   - Document access metrics
+   - User engagement data
+   - Download statistics
+   - Geographic data
+3. Export reports in CSV/JSON
+
+## Security Recommendations
+
+1. Change default admin credentials immediately
+2. Configure secure file permissions
+3. Enable SSL/TLS
+4. Set up regular backups
+5. Monitor access logs
+6. Update regularly
+
+## Troubleshooting
+
+Common issues and solutions:
+1. Upload fails
+   - Check file permissions
+   - Verify PHP upload limits
+   - Ensure directory exists
+2. QR code not generating
+   - Check GD/Imagick extension
+   - Verify temp directory access
+3. Cloud storage issues
+   - Validate credentials
+   - Check network connectivity
+   - Verify bucket permissions
 
 ## Support
 
-For issues or questions, please check the documentation or create an issue in the repository.
+For support:
+1. Check documentation
+2. Review troubleshooting guide
+3. Submit issue on repository
+4. Contact system administrator
+
+## License
+
+This project is licensed under the MIT License. See LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create feature branch
+3. Submit pull request
+4. Follow coding standards
+5. Include tests when applicable
