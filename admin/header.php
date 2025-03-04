@@ -24,7 +24,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <title><?php echo htmlspecialchars($pageTitle ?? 'Admin'); ?> - <?php echo getSettingValue('general.site_title', 'PDF QR Link'); ?></title>
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/tailwind.css?<?php echo CSS_CACHE_KEY; ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" integrity="sha512-dPXYcDub/aeb08c63jRq/k6GaKccl256JQy/AnOq7CAnEZ9FzSL9wSbcZkMp4R26vBsMLFYH4kQ67/bbV8XaCQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script src="https://unpkg.com/alpinejs@3.14.8" defer></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div x-data="{ sidebarOpen: false, sidebarPinned: true }" 
@@ -76,6 +76,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <a href="<?php echo BASE_URL; ?>admin/storage.php" class="group flex items-center px-2 py-2 text-base font-medium rounded-md <?php echo $currentPage === 'storage.php' ? 'bg-gray-700 text-white' : 'text-white hover:bg-gray-700'; ?>">
                     <i class="bi bi-hdd mr-3 text-xl"></i>
                     <span>Storage</span>
+                </a>
+                <a href="<?php echo BASE_URL; ?>admin/s3_backup.php" class="group flex items-center px-2 py-2 text-base font-medium rounded-md <?php echo $currentPage === 's3_backup.php' ? 'bg-gray-700 text-white' : 'text-white hover:bg-gray-700'; ?>">
+                    <i class="bi bi-cloud-arrow-up mr-3 text-xl"></i>
+                    <span>S3 Backup</span>
                 </a>
                 <a href="<?php echo BASE_URL; ?>admin/file_manager.php" class="group flex items-center px-2 py-2 text-base font-medium rounded-md <?php echo $currentPage === 'file_manager.php' ? 'bg-gray-700 text-white' : 'text-white hover:bg-gray-700'; ?>">
                     <i class="bi bi-file-earmark-pdf mr-3 text-xl"></i>

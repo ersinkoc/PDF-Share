@@ -51,12 +51,98 @@ $viewsStmt->bindParam(':uuid', $documentUuid);
 $viewsStmt->execute();
 $recentViews = $viewsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Get previous and next document
+$prevStmt = $db->prepare("SELECT uuid, title FROM documents WHERE id < (SELECT id FROM documents WHERE uuid = :uuid) ORDER BY id DESC LIMIT 1");
+$prevStmt->bindParam(':uuid', $documentUuid);
+$prevStmt->execute();
+$prevDoc = $prevStmt->fetch(PDO::FETCH_ASSOC);
+
+$nextStmt = $db->prepare("SELECT uuid, title FROM documents WHERE id > (SELECT id FROM documents WHERE uuid = :uuid) ORDER BY id ASC LIMIT 1");
+$nextStmt->bindParam(':uuid', $documentUuid);
+$nextStmt->execute();
+$nextDoc = $nextStmt->fetch(PDO::FETCH_ASSOC);
+
 // Get page title
 $pageTitle = 'View Document';
 include 'header.php';
 ?>
 
 <div class="container mx-auto px-4 py-8">
+    <!-- Document Navigation -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <?php if ($prevDoc): ?>
+        <a href="view.php?uuid=<?php echo $prevDoc['uuid']; ?>" class="group bg-white hover:bg-blue-50 border border-gray-200 rounded-lg p-4 transition-all duration-200 ease-in-out transform hover:-translate-x-1">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 mr-4">
+                    <div class="bg-blue-100 group-hover:bg-blue-200 rounded-full p-3 transition-colors duration-200">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-gray-500 mb-1">Previous Document</p>
+                    <h4 class="text-lg font-medium text-gray-900 truncate group-hover:text-blue-600">
+                        <?php echo htmlspecialchars($prevDoc['title']); ?>
+                    </h4>
+                </div>
+            </div>
+        </a>
+        <?php else: ?>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 opacity-50">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 mr-4">
+                    <div class="bg-gray-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm text-gray-500 mb-1">Previous Document</p>
+                    <h4 class="text-lg font-medium text-gray-400">No previous document</h4>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($nextDoc): ?>
+        <a href="view.php?uuid=<?php echo $nextDoc['uuid']; ?>" class="group bg-white hover:bg-blue-50 border border-gray-200 rounded-lg p-4 transition-all duration-200 ease-in-out transform hover:translate-x-1">
+            <div class="flex items-center justify-end">
+                <div class="flex-1 min-w-0 text-right">
+                    <p class="text-sm text-gray-500 mb-1">Next Document</p>
+                    <h4 class="text-lg font-medium text-gray-900 truncate group-hover:text-blue-600">
+                        <?php echo htmlspecialchars($nextDoc['title']); ?>
+                    </h4>
+                </div>
+                <div class="flex-shrink-0 ml-4">
+                    <div class="bg-blue-100 group-hover:bg-blue-200 rounded-full p-3 transition-colors duration-200">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </a>
+        <?php else: ?>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 opacity-50">
+            <div class="flex items-center justify-end">
+                <div class="flex-1 min-w-0 text-right">
+                    <p class="text-sm text-gray-500 mb-1">Next Document</p>
+                    <h4 class="text-lg font-medium text-gray-400">No next document</h4>
+                </div>
+                <div class="flex-shrink-0 ml-4">
+                    <div class="bg-gray-100 rounded-full p-3">
+                        <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+
     <div class="flex justify-between items-center mb-8">
         <h1 class="text-3xl font-bold">View Document</h1>
         <div>

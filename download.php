@@ -14,6 +14,7 @@ if (!defined('BASE_PATH')) {
 require_once 'includes/config.php';
 require_once 'includes/database.php';
 require_once 'includes/utilities.php';
+require_once 'includes/classes/S3Storage.php';
 
 // Helper function to generate UUID if not available from utilities
 if (!function_exists('generateUUID')) {
@@ -52,16 +53,28 @@ if (!$document) {
     exit;
 }
 
-// Get file path
-$filePath = 'uploads/' . $document['filename'];
+// Initialize S3 storage
+$s3Storage = new S3Storage();
 
-// Check if file exists
-if (!file_exists($filePath)) {
-    // File not found
-    http_response_code(404);
-    include '404.php';
-    exit;
+// Check if file exists locally
+$filePath = BASE_PATH . 'uploads/' . $document['filename'];
+if (!file_exists($filePath) && !empty($document['s3_url'])) {
+    // Try to restore from S3
+    if ($s3Storage->restoreDocument($document)) {
+        // File restored successfully
+        logActivity('restore', 'document', $document['uuid'], [
+            'action' => 'Document restored from S3 for downloading'
+        ]);
+    } else {
+        // Failed to restore
+        header('Location: ' . BASE_URL . '404.php');
+        exit;
+    }
 }
+
+// Update last accessed date
+$stmt = $db->prepare("UPDATE documents SET last_accessed_date = CURRENT_TIMESTAMP WHERE uuid = ?");
+$stmt->execute([$documentUuid]);
 
 // Track download if not admin
 if (!$isAdmin) {

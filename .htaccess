@@ -1,7 +1,7 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Set base directory - değiştirin bunu kendi path'inize göre
+# Set base directory - change this according to your path
 RewriteBase /
 
 # Allow direct access to cache directory for QR codes

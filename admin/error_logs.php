@@ -7,7 +7,7 @@
 
 // Include required files
 require_once '../includes/init.php';
-require_once '../includes/utilities.php'; // utilities.php dosyasını dahil ediyoruz
+require_once '../includes/utilities.php'; // Include utilities.php
 
 // Check if user is logged in and is admin
 checkAdminAuth();
@@ -56,10 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clear_logs'])) {
 }
 
 // Get log type (default to 'error')
-$logType = isset($_GET['type']) && $_GET['type'] === 'access' ? 'access' : 'error';
+$logType = 'error';
 
 // Get log file path
-$logFile = $logType === 'error' ? __DIR__ . '/../logs/error.log' : __DIR__ . '/../logs/access.log';
+$logFile = __DIR__ . '/../logs/error.log';
 
 // Get log content
 $logContent = '';
@@ -76,10 +76,10 @@ if (file_exists($logFile)) {
 }
 
 // Format log size
-$logSizeFormatted = formatFileSize($logSize); // utilities.php'deki fonksiyonu kullanıyoruz
+$logSizeFormatted = formatFileSize($logSize); // Using function from utilities.php
 
 // Include header
-$pageTitle = ucfirst($logType) . ' Logs';
+$pageTitle = 'Error Logs';
 include_once 'header.php';
 
 ?>
@@ -87,15 +87,6 @@ include_once 'header.php';
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold"><?php echo $pageTitle; ?></h1>
-        
-        <div class="flex space-x-2">
-            <a href="?type=error" class="px-4 py-2 rounded <?php echo $logType === 'error' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'; ?>">
-                Error Logs
-            </a>
-            <a href="?type=access" class="px-4 py-2 rounded <?php echo $logType === 'access' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'; ?>">
-                Access Logs
-            </a>
-        </div>
     </div>
     
     <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -105,14 +96,9 @@ include_once 'header.php';
         </div>
         
         <div class="flex flex-wrap gap-4">
-            <a href="download_log.php?type=<?php echo $logType; ?>&csrf_token=<?php echo generateCSRFToken(); ?>" 
-               class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
-                <i class="bi bi-download mr-2"></i> Download Log
-            </a>
-            
-            <form action="" method="post" class="inline" onsubmit="return confirm('Are you sure you want to clear the <?php echo $logType; ?> log?');">
+            <form action="" method="post" class="inline" onsubmit="return confirm('Are you sure you want to clear the error log?');">
                 <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
-                <input type="hidden" name="log_type" value="<?php echo $logType; ?>">
+                <input type="hidden" name="log_type" value="error">
                 <button type="submit" name="clear_logs" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
                     <i class="bi bi-trash mr-2"></i> Clear Log
                 </button>

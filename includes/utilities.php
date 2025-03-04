@@ -91,48 +91,69 @@ function generateShortUrl($length = 6) {
  * @return string URL to QR code image
  */
 function generateQRCode($url) {
-    // Use QRServer API instead of Google Charts
-    $size = getSettingValue('qrcode.size',300);
-    $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data=" . urlencode($url);
-    
-    // Create a unique hash for the URL
-    $urlHash = md5($url);
-    
-    // Save QR code to cache
-    $cacheFile = CACHE_DIR . $urlHash . '.png';
-    $cacheUrl = BASE_URL . 'cache/' . $urlHash . '.png';
-    
-    // Check if cache directory exists
-    if (!file_exists(CACHE_DIR)) {
-        mkdir(CACHE_DIR, 0755, true);
-    }
-    
-    // If QR code already exists in cache, return it
-    if (file_exists($cacheFile)) {
-        return $cacheUrl;
-    }
-    
-    // Try to download QR code with error handling
     try {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 5 // 5 seconds timeout
-            ]
+        // Use QR code library
+        require_once BASE_PATH . 'vendor/autoload.php';
+        
+        // Get QR code size from settings (default to 5 if not set)
+        $qrSize = (int)getSettingValue('qrcode.size', 5);
+        
+        // Create QR code options
+        $options = new \chillerlan\QRCode\QROptions([
+            'outputType' => \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG,
+            'eccLevel' => \chillerlan\QRCode\QRCode::ECC_L,
+            'scale' => max(1, min($qrSize, 20)), // Ensure size is between 1 and 20
+            'imageBase64' => false,
+            'imageTransparent' => false,
+            'drawLightModules' => true,
+            'keepAsSquare' => true,
+            'moduleValues' => [
+                // Light (empty) modules
+                \chillerlan\QRCode\QRCode::M_FINDER_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_FINDER_DOT => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_ALIGNMENT_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_DARKMODULE => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_TIMING_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_FORMAT_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_VERSION_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_DATA_DARK => [0, 0, 0],
+                \chillerlan\QRCode\QRCode::M_QUIETZONE => [255, 255, 255],
+            ],
         ]);
         
-        $qrCode = @file_get_contents($qrUrl, false, $context);
+        // Generate unique filename
+        $urlHash = md5($url);
+        $cacheFile = CACHE_DIR . $urlHash . '.png';
+        $cacheUrl = BASE_URL . 'cache/' . $urlHash . '.png';
         
-        if ($qrCode !== false) {
-            file_put_contents($cacheFile, $qrCode);
-            return $cacheUrl;
+        // Check cache directory
+        if (!file_exists(CACHE_DIR)) {
+            mkdir(CACHE_DIR, 0755, true);
         }
+        
+        // Return from cache if exists and size hasn't changed
+        if (file_exists($cacheFile)) {
+            $cachedSize = getSettingValue('qrcode.last_size_' . $urlHash);
+            if ($cachedSize == $qrSize) {
+                return $cacheUrl;
+            }
+        }
+        
+        // Generate and save QR code
+        $qrcode = new \chillerlan\QRCode\QRCode($options);
+        $qrcode->render($url, $cacheFile);
+        
+        // Save last used size for cache
+        updateSetting('qrcode.last_size_' . $urlHash, $qrSize);
+        
+        return $cacheUrl;
     } catch (Exception $e) {
         // Log error
         error_log("QR code generation failed: " . $e->getMessage());
+        
+        // Return placeholder image
+        return BASE_URL . 'assets/img/qr-placeholder.png';
     }
-    
-    // Return fallback if download fails
-    return BASE_URL . 'assets/img/qr-placeholder.png';
 }
 
 /**
@@ -276,35 +297,24 @@ function convertPHPSizeToBytes($size) {
  * @return string CSRF token
  */
 function generateCSRFToken() {
-    $token = bin2hex(random_bytes(32));
-    $_SESSION['csrf_token'] = $token;
-    $_SESSION['csrf_token_time'] = time();
-    return $token;
+    if (!isset($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
 }
 
 /**
  * Validate CSRF token
  * 
- * @param string $token CSRF token to validate
- * @return bool True if token is valid, false otherwise
+ * @param string $token Token to validate
+ * @return bool True if valid, false otherwise
  */
 function validateCSRFToken($token) {
-    if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time'])) {
+    if (!isset($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token']) || empty($token)) {
         return false;
     }
     
-    if ($_SESSION['csrf_token'] !== $token) {
-        return false;
-    }
-    
-    if (time() - $_SESSION['csrf_token_time'] > CSRF_TOKEN_EXPIRY) {
-        // Token expired
-        unset($_SESSION['csrf_token']);
-        unset($_SESSION['csrf_token_time']);
-        return false;
-    }
-    
-    return true;
+    return hash_equals((string)$_SESSION['csrf_token'], (string)$token);
 }
 
 /**
@@ -315,7 +325,7 @@ function validateCSRFToken($token) {
 function detectDeviceType() {
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
-    if (preg_match('/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i', $userAgent) || preg_match('/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i', substr($userAgent, 0, 4))) {
+    if (preg_match('/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i', $userAgent) || preg_match('/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tt\-|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i', substr($userAgent, 0, 4))) {
         return 'mobile';
     }
     
@@ -353,15 +363,24 @@ function getTotalStorageUsage() {
         $totalFiles = $result['total_files'] ?: 0;
         
         // Get max storage size from constant
-        // $maxStorage = defined('MAX_STORAGE_SIZE') ? MAX_STORAGE_SIZE : (1024 * 1024 * 1024); // Default 1GB
         $maxStorage = getSettingValue('storage.max_space');
         
         // Calculate percentage
         $percent = min(100, ($totalSize / $maxStorage) * 100);
         
-        // Estimate PDF and QR code sizes (80% PDF, 20% QR)
-        $pdfSize = $totalSize * 0.8;
-        $qrSize = $totalSize * 0.2;
+        // Calculate actual QR code cache size
+        $qrSize = 0;
+        if (defined('CACHE_DIR') && file_exists(CACHE_DIR)) {
+            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(CACHE_DIR, FilesystemIterator::SKIP_DOTS)) as $file) {
+                $qrSize += $file->getSize();
+            }
+        }
+        
+        // PDF size is total size of documents
+        $pdfSize = $totalSize;
+        
+        // Total size includes both PDF and QR
+        $totalSize = $pdfSize + $qrSize;
         
         return [
             'total_size' => $totalSize,
@@ -1157,6 +1176,7 @@ function getAvailableBackups($backupDir) {
                 'filename' => $filename,
                 'size' => filesize($file),
                 'created_at' => $timestamp ? date('Y-m-d H:i:s', $timestamp) : date('Y-m-d H:i:s', filemtime($file)),
+                'created' => $timestamp ? date('Y-m-d H:i:s', $timestamp) : date('Y-m-d H:i:s', filemtime($file)), // For backwards compatibility
                 'created' => $timestamp ? date('Y-m-d H:i:s', $timestamp) : date('Y-m-d H:i:s', filemtime($file)), // Eski alan adı uyumluluğu için
                 'timestamp' => $timestamp ?: filemtime($file)
             ];
@@ -1236,6 +1256,273 @@ function getDatabaseStatsFromFile($backupFile) {
             'file_modified' => filemtime($backupFile),
             'error' => $e->getMessage()
         ];
+    }
+}
+
+/**
+ * Recursively copy a directory
+ * 
+ * @param string $source Source directory
+ * @param string $destination Destination directory
+ * @return bool True on success, false on failure
+ */
+function recursiveCopy($source, $destination) {
+    if (is_dir($source)) {
+        if (!file_exists($destination)) {
+            mkdir($destination, 0755, true);
+        }
+        
+        $dir = dir($source);
+        while (($entry = $dir->read()) !== false) {
+            if ($entry == '.' || $entry == '..') {
+                continue;
+            }
+            
+            recursiveCopy($source . '/' . $entry, $destination . '/' . $entry);
+        }
+        
+        $dir->close();
+        return true;
+    } else {
+        return copy($source, $destination);
+    }
+}
+
+/**
+ * Recursively delete a directory
+ * 
+ * @param string $path Directory path
+ * @return bool True on success, false on failure
+ */
+function recursiveDelete($path) {
+    if (is_dir($path)) {
+        $files = glob($path . '/*');
+        foreach ($files as $file) {
+            is_dir($file) ? recursiveDelete($file) : unlink($file);
+        }
+        return rmdir($path);
+    } else {
+        return unlink($path);
+    }
+}
+
+/**
+ * Download backup file from various sources
+ * 
+ * @param string $source Source type ('db', 's3', 'settings')
+ * @param string $filename Filename to download
+ * @param string $bucket S3 bucket name (optional, for S3 source)
+ * @return bool|string False on failure, file path on success
+ */
+function downloadBackupFile($source, $filename, $bucket = null) {
+    try {
+        $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'downloads';
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $downloadPath = $tempDir . DIRECTORY_SEPARATOR . basename($filename);
+
+        switch ($source) {
+            case 'db':
+                // Local database backup
+                $backupPath = BACKUPS_DIR . DIRECTORY_SEPARATOR . $filename;
+                if (!file_exists($backupPath)) {
+                    throw new Exception("Backup file not found: $filename");
+                }
+                if (!copy($backupPath, $downloadPath)) {
+                    throw new Exception("Failed to copy backup file");
+                }
+                break;
+
+            case 's3':
+                // S3 backup
+                if (!$bucket) {
+                    throw new Exception("S3 bucket name is required");
+                }
+
+                require_once BASE_PATH . 'vendor/autoload.php';
+                
+                $s3Client = new Aws\S3\S3Client([
+                    'version' => 'latest',
+                    'region'  => getSettingValue('aws.region', 'us-east-1'),
+                    'credentials' => [
+                        'key'    => getSettingValue('aws.access_key'),
+                        'secret' => getSettingValue('aws.secret_key')
+                    ]
+                ]);
+
+                // Download from S3
+                try {
+                    $result = $s3Client->getObject([
+                        'Bucket' => $bucket,
+                        'Key'    => $filename,
+                        'SaveAs' => $downloadPath
+                    ]);
+                } catch (Aws\S3\Exception\S3Exception $e) {
+                    throw new Exception("Failed to download from S3: " . $e->getMessage());
+                }
+                break;
+
+            case 'settings':
+                // Settings backup
+                $settingsPath = BASE_PATH . 'settings' . DIRECTORY_SEPARATOR . $filename;
+                if (!file_exists($settingsPath)) {
+                    throw new Exception("Settings file not found: $filename");
+                }
+                if (!copy($settingsPath, $downloadPath)) {
+                    throw new Exception("Failed to copy settings file");
+                }
+                break;
+
+            default:
+                throw new Exception("Invalid source type: $source");
+        }
+
+        // Log the download
+        logActivity('download_backup', $source, $filename, [
+            'source' => $source,
+            'filename' => $filename,
+            'bucket' => $bucket
+        ]);
+
+        return $downloadPath;
+    } catch (Exception $e) {
+        logError("Failed to download backup: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Stream file download to browser
+ * 
+ * @param string $filePath Path to file
+ * @param string $filename Filename to use in download
+ * @return bool True if successful, false otherwise
+ */
+function streamFileDownload($filePath, $filename = null) {
+    try {
+        if (!file_exists($filePath)) {
+            throw new Exception("File not found: $filePath");
+        }
+
+        $filename = $filename ?: basename($filePath);
+        $filesize = filesize($filePath);
+        $mimetype = mime_content_type($filePath) ?: 'application/octet-stream';
+
+        // Clear any output buffers
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Set headers
+        header('Content-Type: ' . $mimetype);
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . $filesize);
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        // Stream file in chunks
+        $handle = fopen($filePath, 'rb');
+        while (!feof($handle)) {
+            echo fread($handle, 8192);
+            flush();
+        }
+        fclose($handle);
+
+        // Delete temporary file if in temp directory
+        if (strpos($filePath, sys_get_temp_dir()) === 0) {
+            unlink($filePath);
+        }
+
+        return true;
+    } catch (Exception $e) {
+        logError("Failed to stream file: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get backup file information
+ * 
+ * @param string $source Source type ('db', 's3', 'settings')
+ * @param string $filename Filename
+ * @param string $bucket S3 bucket name (optional)
+ * @return array|false File information or false on failure
+ */
+function getBackupFileInfo($source, $filename, $bucket = null) {
+    try {
+        $info = [
+            'filename' => $filename,
+            'source' => $source,
+            'size' => 0,
+            'modified' => null,
+            'type' => null
+        ];
+
+        switch ($source) {
+            case 'db':
+                $path = BACKUPS_DIR . DIRECTORY_SEPARATOR . $filename;
+                if (!file_exists($path)) {
+                    throw new Exception("File not found");
+                }
+                $info['size'] = filesize($path);
+                $info['modified'] = filemtime($path);
+                $info['type'] = 'database';
+                break;
+
+            case 's3':
+                if (!$bucket) {
+                    throw new Exception("S3 bucket name is required");
+                }
+
+                require_once BASE_PATH . 'vendor/autoload.php';
+                
+                $s3Client = new Aws\S3\S3Client([
+                    'version' => 'latest',
+                    'region'  => getSettingValue('aws.region', 'us-east-1'),
+                    'credentials' => [
+                        'key'    => getSettingValue('aws.access_key'),
+                        'secret' => getSettingValue('aws.secret_key')
+                    ]
+                ]);
+
+                try {
+                    $result = $s3Client->headObject([
+                        'Bucket' => $bucket,
+                        'Key'    => $filename
+                    ]);
+                    
+                    $info['size'] = $result['ContentLength'];
+                    $info['modified'] = $result['LastModified']->getTimestamp();
+                    $info['type'] = 'cloud';
+                } catch (Aws\S3\Exception\S3Exception $e) {
+                    throw new Exception("Failed to get S3 file info: " . $e->getMessage());
+                }
+                break;
+
+            case 'settings':
+                $path = BASE_PATH . 'settings' . DIRECTORY_SEPARATOR . $filename;
+                if (!file_exists($path)) {
+                    throw new Exception("File not found");
+                }
+                $info['size'] = filesize($path);
+                $info['modified'] = filemtime($path);
+                $info['type'] = 'settings';
+                break;
+
+            default:
+                throw new Exception("Invalid source type");
+        }
+
+        $info['size_formatted'] = formatFileSize($info['size']);
+        $info['modified_formatted'] = date('Y-m-d H:i:s', $info['modified']);
+
+        return $info;
+    } catch (Exception $e) {
+        logError("Failed to get backup file info: " . $e->getMessage());
+        return false;
     }
 }
 

@@ -18,11 +18,13 @@ $backups = [];
 $selectedBackupStats = null;
 $selectedBackupFile = '';
 
-// Generate CSRF token if not exists
-if (!isset($_SESSION['reset_db_csrf_token'])) {
-    $_SESSION['reset_db_csrf_token'] = bin2hex(random_bytes(32));
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-$csrf_token = $_SESSION['reset_db_csrf_token'];
+
+// Generate CSRF token
+$csrfToken = generateCSRFToken();
 
 // Get database statistics
 $dbStats = getDatabaseStats();
@@ -32,11 +34,12 @@ $backups = getAvailableBackups(BACKUPS_DIR);
 
 // Process backup request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_backup'])) {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        $message = 'Invalid CSRF token. Please try again.';
-        $messageType = 'error';
-    } else {
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
+        
         // Create backup
         $backupFile = backupDatabase(BACKUPS_DIR);
         
@@ -50,139 +53,356 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_backup'])) {
             $message = 'Failed to create database backup.';
             $messageType = 'error';
         }
+    } catch (Exception $e) {
+        $message = 'Failed to create backup: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Backup creation error: ' . $e->getMessage());
     }
 }
 
 // Process restore request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        $message = 'Invalid CSRF token. Please try again.';
-        $messageType = 'error';
-    } else if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
-        $message = 'No backup file selected.';
-        $messageType = 'error';
-    } else {
-        $backupFile = $_POST['backup_file'];
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
         
-        // Validate backup file path (ensure it's within the backups directory)
-        $realBackupPath = realpath($backupFile);
-        $realBackupsDir = realpath(BACKUPS_DIR);
-        
-        if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
-            $message = 'Invalid backup file path.';
+        if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
+            $message = 'No backup file selected.';
             $messageType = 'error';
         } else {
-            // Restore database
-            $result = restoreDatabase($backupFile);
+            $backupFile = $_POST['backup_file'];
             
-            if ($result) {
-                $message = 'Database restored successfully from: ' . basename($backupFile);
-                $messageType = 'success';
-                
-                // Refresh database stats
-                $dbStats = getDatabaseStats();
-            } else {
-                $message = 'Failed to restore database.';
+            // Validate backup file path (ensure it's within the backups directory)
+            $realBackupPath = realpath($backupFile);
+            $realBackupsDir = realpath(BACKUPS_DIR);
+            
+            if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
+                $message = 'Invalid backup file path.';
                 $messageType = 'error';
+            } else {
+                // Restore database
+                $result = restoreDatabase($backupFile);
+                
+                if ($result) {
+                    $message = 'Database restored successfully from: ' . basename($backupFile);
+                    $messageType = 'success';
+                    
+                    // Refresh database stats
+                    $dbStats = getDatabaseStats();
+                } else {
+                    $message = 'Failed to restore database.';
+                    $messageType = 'error';
+                }
             }
         }
+    } catch (Exception $e) {
+        $message = 'Failed to restore backup: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Backup restore error: ' . $e->getMessage());
     }
 }
 
 // Process reset request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_database'])) {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        $message = 'Invalid CSRF token. Please try again.';
-        $messageType = 'error';
-    } else if (!isset($_POST['confirm_reset']) || $_POST['confirm_reset'] !== 'RESET') {
-        $message = 'Please type RESET to confirm database reset.';
-        $messageType = 'error';
-    } else {
-        // Reset database
-        $result = resetDatabase();
-        
-        if ($result) {
-            $message = 'Database reset successfully. A backup was created automatically.';
-            $messageType = 'success';
-            
-            // Refresh database stats
-            $dbStats = getDatabaseStats();
-            
-            // Refresh backup list
-            $backups = getAvailableBackups(BACKUPS_DIR);
-        } else {
-            $message = 'Failed to reset database.';
-            $messageType = 'error';
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
         }
+        
+        if (!isset($_POST['confirm_reset']) || $_POST['confirm_reset'] !== 'RESET') {
+            $message = 'Please type RESET to confirm database reset.';
+            $messageType = 'error';
+        } else {
+            // Backup settings before reset
+            try {
+                $db = getDbConnection();
+                $stmt = $db->query("SELECT * FROM settings");
+                $settings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $settingsBackup = json_encode($settings, JSON_PRETTY_PRINT);
+                
+                // Save settings to a temporary file
+                $settingsBackupFile = BACKUPS_DIR . 'settings_backup_' . date('Y-m-d_H-i-s') . '.json';
+                file_put_contents($settingsBackupFile, $settingsBackup);
+            } catch (Exception $e) {
+                error_log('Settings backup error: ' . $e->getMessage());
+            }
+
+            // Reset database
+            $result = resetDatabase();
+            
+            if ($result) {
+                // Restore settings if backup exists
+                if (isset($settingsBackupFile) && file_exists($settingsBackupFile)) {
+                    try {
+                        $db = getDbConnection();
+                        $restoredSettings = json_decode(file_get_contents($settingsBackupFile), true);
+                        
+                        // Restore each setting
+                        $stmt = $db->prepare("INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)");
+                        foreach ($restoredSettings as $setting) {
+                            $stmt->execute([$setting['setting_key'], $setting['setting_value']]);
+                        }
+                        
+                        // Delete temporary settings backup
+                        unlink($settingsBackupFile);
+                        
+                        $message = 'Database reset successfully. Settings were preserved and restored.';
+                    } catch (Exception $e) {
+                        error_log('Settings restore error: ' . $e->getMessage());
+                        $message = 'Database reset successfully, but settings restoration failed. A backup was created automatically.';
+                    }
+                } else {
+                    $message = 'Database reset successfully. A backup was created automatically.';
+                }
+                
+                $messageType = 'success';
+                
+                // Refresh database stats
+                $dbStats = getDatabaseStats();
+                
+                // Refresh backup list
+                $backups = getAvailableBackups(BACKUPS_DIR);
+            } else {
+                $message = 'Failed to reset database.';
+                $messageType = 'error';
+            }
+        }
+    } catch (Exception $e) {
+        $message = 'Failed to reset database: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Database reset error: ' . $e->getMessage());
     }
 }
 
 // Process delete backup request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_backup'])) {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        $message = 'Invalid CSRF token. Please try again.';
-        $messageType = 'error';
-    } else if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
-        $message = 'No backup file selected.';
-        $messageType = 'error';
-    } else {
-        $backupFile = $_POST['backup_file'];
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
         
-        // Validate backup file path (ensure it's within the backups directory)
-        $realBackupPath = realpath($backupFile);
-        $realBackupsDir = realpath(BACKUPS_DIR);
-        
-        if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
-            $message = 'Invalid backup file path.';
+        if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
+            $message = 'No backup file selected.';
             $messageType = 'error';
         } else {
-            // Delete backup file
-            if (unlink($backupFile)) {
-                $message = 'Backup file deleted successfully: ' . basename($backupFile);
-                $messageType = 'success';
-                
-                // Refresh backup list
-                $backups = getAvailableBackups(BACKUPS_DIR);
-            } else {
-                $message = 'Failed to delete backup file.';
+            $backupFile = $_POST['backup_file'];
+            
+            // Validate backup file path (ensure it's within the backups directory)
+            $realBackupPath = realpath($backupFile);
+            $realBackupsDir = realpath(BACKUPS_DIR);
+            
+            if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
+                $message = 'Invalid backup file path.';
                 $messageType = 'error';
+            } else {
+                // Delete backup file
+                if (unlink($backupFile)) {
+                    $message = 'Backup file deleted successfully: ' . basename($backupFile);
+                    $messageType = 'success';
+                    
+                    // Refresh backup list
+                    $backups = getAvailableBackups(BACKUPS_DIR);
+                } else {
+                    $message = 'Failed to delete backup file.';
+                    $messageType = 'error';
+                }
             }
         }
+    } catch (Exception $e) {
+        $message = 'Failed to delete backup: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Backup delete error: ' . $e->getMessage());
     }
 }
 
 // Process view backup stats request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['view_backup_stats'])) {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        $message = 'Invalid CSRF token. Please try again.';
-        $messageType = 'error';
-    } else if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
-        $message = 'No backup file selected.';
-        $messageType = 'error';
-    } else {
-        $backupFile = $_POST['backup_file'];
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
         
-        // Validate backup file path
-        $realBackupPath = realpath($backupFile);
-        $realBackupsDir = realpath(BACKUPS_DIR);
-        
-        if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
-            $message = 'Invalid backup file path.';
+        if (!isset($_POST['backup_file']) || empty($_POST['backup_file'])) {
+            $message = 'No backup file selected.';
             $messageType = 'error';
         } else {
-            // Get backup statistics
-            $selectedBackupStats = getDatabaseStatsFromFile($backupFile);
-            $selectedBackupFile = $backupFile;
+            $backupFile = $_POST['backup_file'];
             
-            if (isset($selectedBackupStats['error'])) {
-                $message = 'Error analyzing backup file: ' . $selectedBackupStats['error'];
+            // Validate backup file path
+            $realBackupPath = realpath($backupFile);
+            $realBackupsDir = realpath(BACKUPS_DIR);
+            
+            if ($realBackupPath === false || strpos($realBackupPath, $realBackupsDir) !== 0) {
+                $message = 'Invalid backup file path.';
                 $messageType = 'error';
+            } else {
+                // Get backup statistics
+                $selectedBackupStats = getDatabaseStatsFromFile($backupFile);
+                $selectedBackupFile = $backupFile;
+                
+                if (isset($selectedBackupStats['error'])) {
+                    $message = 'Error analyzing backup file: ' . $selectedBackupStats['error'];
+                    $messageType = 'error';
+                }
             }
         }
+    } catch (Exception $e) {
+        $message = 'Failed to view backup statistics: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Backup statistics error: ' . $e->getMessage());
+    }
+}
+
+// Process backup request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['backup_settings'])) {
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
+        
+        $db = getDbConnection();
+        $stmt = $db->query("SELECT * FROM settings");
+        $settings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $settingsBackup = json_encode($settings, JSON_PRETTY_PRINT);
+        
+        // Save settings to backup file
+        $settingsBackupFile = BACKUPS_DIR . 'settings_backup_' . date('Y-m-d_H-i-s') . '.json';
+        file_put_contents($settingsBackupFile, $settingsBackup);
+        
+        $message = 'Settings backup created successfully: ' . basename($settingsBackupFile);
+        $messageType = 'success';
+        
+        // Log activity
+        logActivity('backup', 'settings', basename($settingsBackupFile));
+    } catch (Exception $e) {
+        $message = 'Failed to create settings backup: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Settings backup error: ' . $e->getMessage());
+    }
+}
+
+// Process settings restore request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_settings'])) {
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
+        
+        if (!isset($_POST['settings_file']) || empty($_POST['settings_file'])) {
+            $message = 'No settings backup file selected.';
+            $messageType = 'error';
+        } else {
+            $settingsFile = $_POST['settings_file'];
+            
+            // Validate backup file path
+            $realSettingsPath = realpath($settingsFile);
+            $realBackupsDir = realpath(BACKUPS_DIR);
+            
+            if ($realSettingsPath === false || strpos($realSettingsPath, $realBackupsDir) !== 0) {
+                $message = 'Invalid settings backup file path.';
+                $messageType = 'error';
+            } else {
+                $db = getDbConnection();
+                $restoredSettings = json_decode(file_get_contents($settingsFile), true);
+                
+                if ($restoredSettings === null) {
+                    throw new Exception('Invalid JSON in settings backup file');
+                }
+                
+                // Begin transaction
+                $db->beginTransaction();
+                
+                try {
+                    // Clear current settings
+                    $db->exec("DELETE FROM settings");
+                    
+                    // Restore settings
+                    $stmt = $db->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)");
+                    foreach ($restoredSettings as $setting) {
+                        $stmt->execute([$setting['setting_key'], $setting['setting_value']]);
+                    }
+                    
+                    // Commit transaction
+                    $db->commit();
+                    
+                    $message = 'Settings restored successfully from: ' . basename($settingsFile);
+                    $messageType = 'success';
+                    
+                    // Log activity
+                    logActivity('restore', 'settings', basename($settingsFile));
+                } catch (Exception $e) {
+                    // Rollback transaction on error
+                    $db->rollBack();
+                    throw $e;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        $message = 'Failed to restore settings: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Settings restore error: ' . $e->getMessage());
+    }
+}
+
+// Process delete settings backup request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_settings_backup'])) {
+    try {
+        // Validate CSRF token
+        if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+            throw new Exception('Invalid CSRF token. Please try again.');
+        }
+        
+        if (!isset($_POST['settings_file']) || empty($_POST['settings_file'])) {
+            $message = 'No settings backup file selected.';
+            $messageType = 'error';
+        } else {
+            $settingsFile = $_POST['settings_file'];
+            
+            // Validate backup file path
+            $realSettingsPath = realpath($settingsFile);
+            $realBackupsDir = realpath(BACKUPS_DIR);
+            
+            if ($realSettingsPath === false || strpos($realSettingsPath, $realBackupsDir) !== 0) {
+                $message = 'Invalid settings backup file path.';
+                $messageType = 'error';
+            } else {
+                if (unlink($settingsFile)) {
+                    $message = 'Settings backup deleted successfully: ' . basename($settingsFile);
+                    $messageType = 'success';
+                    
+                    // Log activity
+                    logActivity('delete', 'settings', basename($settingsFile));
+                } else {
+                    $message = 'Failed to delete settings backup file.';
+                    $messageType = 'error';
+                }
+            }
+        }
+    } catch (Exception $e) {
+        $message = 'Failed to delete settings backup: ' . $e->getMessage();
+        $messageType = 'error';
+        error_log('Settings backup delete error: ' . $e->getMessage());
+    }
+}
+
+if (isset($_GET['download']) && !empty($_GET['file'])) {
+    $filename = basename($_GET['file']);
+    $downloadPath = downloadBackupFile('db', $filename);
+    
+    if ($downloadPath) {
+        streamFileDownload($downloadPath, $filename);
+        exit;
+    } else {
+        $_SESSION['error'] = "Failed to download backup file."; 
+        header("Location: db_management.php");
+        exit;
     }
 }
 
@@ -196,7 +416,7 @@ include_once 'header.php';
     
     <?php if (!empty($message)): ?>
         <div class="mb-4 p-4 rounded <?php echo $messageType === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'; ?>">
-            <?php echo htmlspecialchars($message); ?>
+            <?php echo $message; ?>
         </div>
     <?php endif; ?>
     
@@ -208,7 +428,7 @@ include_once 'header.php';
         </p>
         
         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="mb-6">
-            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
             <button type="submit" name="create_backup" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                 Create Backup
             </button>
@@ -234,7 +454,7 @@ include_once 'header.php';
                                 <td class="py-2 px-4 border-b"><?php echo formatFileSize($backup['size']); ?></td>
                                 <td class="py-2 px-4 border-b">
                                     <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline">
-                                        <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                         <input type="hidden" name="backup_file" value="<?php echo htmlspecialchars($backup['path']); ?>">
                                         <button type="submit" name="restore_backup" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs focus:outline-none focus:shadow-outline mr-1" onclick="return confirm('Are you sure you want to restore this backup? Current data will be replaced.')">
                                             Restore
@@ -246,6 +466,12 @@ include_once 'header.php';
                                             View Stats
                                         </button>
                                     </form>
+                                    <div class="text-end">
+                                        <a href="db_management.php?download=1&file=<?php echo urlencode($backup['filename']); ?>" 
+                                           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs focus:outline-none focus:shadow-outline">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -272,8 +498,13 @@ include_once 'header.php';
             <p>This action cannot be undone. All data will be permanently deleted.</p>
         </div>
         
+        <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">
+            <p class="font-bold">Note:</p>
+            <p>Your system settings will be automatically preserved and restored after the reset.</p>
+        </div>
+        
         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="mb-6">
-            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
             
             <div class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2" for="confirm_reset">
@@ -382,7 +613,7 @@ include_once 'header.php';
             
             <div class="mt-6 flex justify-between">
                 <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline">
-                    <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                     <input type="hidden" name="backup_file" value="<?php echo htmlspecialchars($selectedBackupFile); ?>">
                     <button type="submit" name="restore_backup" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" onclick="return confirm('Are you sure you want to restore this backup? Current data will be replaced.')">
                         <i class="bi bi-arrow-counterclockwise mr-2"></i> Restore This Backup

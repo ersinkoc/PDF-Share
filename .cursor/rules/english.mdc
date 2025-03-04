@@ -1,0 +1,6 @@
+---
+description: English
+globs: *.*
+alwaysApply: true
+---
+Everything in files are must be in English, But respond me in Turkish.

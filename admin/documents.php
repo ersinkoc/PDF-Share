@@ -4,10 +4,8 @@
  * 
  * Manages all uploaded documents
  */
-session_start();
-require_once '../includes/config.php';
-require_once '../includes/database.php';
-require_once '../includes/utilities.php';
+// Include required files
+require_once '../includes/init.php';
 
 // Check if user is logged in
 if (!isLoggedIn()) {
@@ -15,14 +13,15 @@ if (!isLoggedIn()) {
     exit;
 }
 
+// Get database connection
+$db = getDbConnection();
+
 // Handle document deletion
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $documentUuid = $_GET['delete'];
     $csrfToken = $_GET['token'] ?? '';
     
     if (validateCSRFToken($csrfToken)) {
-        $db = getDbConnection();
-        
         // Get document filename
         $stmt = $db->prepare("SELECT filename FROM documents WHERE uuid = :uuid");
         $stmt->bindParam(':uuid', $documentUuid);
@@ -74,7 +73,6 @@ $perPage = ($setting && !empty($setting['setting_value'])) ? (int)$setting['sett
 $offset = ($page - 1) * $perPage;
 
 // Get documents with pagination
-$db = getDbConnection();
 $totalStmt = $db->query("SELECT COUNT(*) FROM documents");
 $totalDocuments = $totalStmt->fetchColumn();
 $totalPages = ceil($totalDocuments / $perPage);

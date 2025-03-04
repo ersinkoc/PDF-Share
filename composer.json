@@ -1,0 +1,6 @@
+{
+    "require": {
+        "aws/aws-sdk-php": "^3.340",
+        "chillerlan/php-qrcode": "^5.0"
+    }
+}

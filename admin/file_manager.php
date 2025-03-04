@@ -19,11 +19,13 @@ $totalSize = 0;
 $uploadsDir = BASE_PATH . 'uploads';
 $viewFile = null;
 
-// Generate CSRF token if not exists
-if (!isset($_SESSION['file_manager_csrf_token'])) {
-    $_SESSION['file_manager_csrf_token'] = bin2hex(random_bytes(32));
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-$csrf_token = $_SESSION['file_manager_csrf_token'];
+
+// Generate CSRF token
+$csrfToken = generateCSRFToken();
 
 // Get database connection
 $db = getDbConnection();
@@ -86,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['view'])) {
 // Process delete all orphaned files request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_all_files'])) {
     // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $message = 'Invalid CSRF token. Please try again.';
         $messageType = 'error';
     } else {
@@ -168,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_all_files'])) 
 // Process import all files request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_all_files'])) {
     // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $message = 'Invalid CSRF token. Please try again.';
         $messageType = 'error';
     } else {
@@ -293,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_all_files'])) 
 // Process delete file request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_file'])) {
     // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $message = 'Invalid CSRF token. Please try again.';
         $messageType = 'error';
     } else if (!isset($_POST['filename']) || empty($_POST['filename'])) {
@@ -361,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_file'])) {
 // Process import file request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_file'])) {
     // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
         $message = 'Invalid CSRF token. Please try again.';
         $messageType = 'error';
     } else if (!isset($_POST['filename']) || empty($_POST['filename'])) {
@@ -487,7 +489,7 @@ include_once 'header.php';
                     </p>
                     <div class="flex space-x-2">
                         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline">
-                            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <input type="hidden" name="filename" value="<?php echo htmlspecialchars($viewFile['name']); ?>">
                             <button type="submit" name="import_file" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm focus:outline-none focus:shadow-outline">
                                 <i class="bi bi-plus-circle"></i> Import
@@ -495,7 +497,7 @@ include_once 'header.php';
                         </form>
                         
                         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline" onsubmit="return confirm('Are you sure you want to delete this file?');">
-                            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <input type="hidden" name="filename" value="<?php echo htmlspecialchars($viewFile['name']); ?>">
                             <button type="submit" name="delete_file" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm focus:outline-none focus:shadow-outline">
                                 <i class="bi bi-trash"></i> Delete
@@ -527,7 +529,7 @@ include_once 'header.php';
                 <div class="flex justify-between items-center mb-4">
                     <div>
                         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline" onsubmit="return confirm('Are you sure you want to delete all <?php echo count($orphanedFiles); ?> orphaned files? This action cannot be undone.');">
-                            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <button type="submit" name="delete_all_files" class="bg-red-600 hover:bg-red-800 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                                 <i class="bi bi-trash"></i> Delete All Orphaned Files
                             </button>
@@ -535,7 +537,7 @@ include_once 'header.php';
                     </div>
                     <div>
                         <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline">
-                            <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <button type="submit" name="import_all_files" class="bg-green-600 hover:bg-green-800 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                                 <i class="bi bi-plus-circle"></i> Import All Files
                             </button>
@@ -566,7 +568,7 @@ include_once 'header.php';
                                             </a>
                                             
                                             <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline">
-                                                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                                 <input type="hidden" name="filename" value="<?php echo htmlspecialchars($file['name']); ?>">
                                                 <button type="submit" name="import_file" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs focus:outline-none focus:shadow-outline">
                                                     <i class="bi bi-plus-circle"></i> Import
@@ -574,7 +576,7 @@ include_once 'header.php';
                                             </form>
                                             
                                             <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="inline" onsubmit="return confirm('Are you sure you want to delete this file?');">
-                                                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                                 <input type="hidden" name="filename" value="<?php echo htmlspecialchars($file['name']); ?>">
                                                 <button type="submit" name="delete_file" class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs focus:outline-none focus:shadow-outline">
                                                     <i class="bi bi-trash"></i> Delete

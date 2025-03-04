@@ -232,6 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_document_back
                             
                             $filteredDocument = array_intersect_key($document, array_flip($tableColumns));
                             
+                            // Remove ID field, new ID will be generated automatically
+                            unset($filteredDocument['id']);
+                            
                             // Insert document
                             $columns = array_keys($filteredDocument);
                             $placeholders = array_fill(0, count($columns), '?');

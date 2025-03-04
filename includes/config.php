@@ -107,10 +107,11 @@ define('DATABASE_FILE', DB_PATH); // For compatibility with getSystemStatus
 define('CACHE_DIR', BASE_PATH . 'cache' . DIRECTORY_SEPARATOR);
 define('LOGS_DIR', BASE_PATH . 'logs' . DIRECTORY_SEPARATOR);
 define('BACKUPS_DIR', BASE_PATH . 'backups' . DIRECTORY_SEPARATOR);
+define('UPLOADS_DIR', BASE_PATH . 'uploads' . DIRECTORY_SEPARATOR);
 define('ERROR_LOG', LOGS_DIR . 'error.log');
 
 // Create required directories if they don't exist
-foreach ([CACHE_DIR, LOGS_DIR, BACKUPS_DIR] as $dir) {
+foreach ([CACHE_DIR, LOGS_DIR, BACKUPS_DIR, UPLOADS_DIR] as $dir) {
     if (!file_exists($dir)) {
         mkdir($dir, 0755, true);
     }
