@@ -106,18 +106,25 @@ function generateQRCode($url) {
             'imageBase64' => false,
             'imageTransparent' => false,
             'drawLightModules' => true,
-            'keepAsSquare' => true,
             'moduleValues' => [
-                // Light (empty) modules
-                \chillerlan\QRCode\QRCode::M_FINDER_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_FINDER_DOT => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_ALIGNMENT_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_DARKMODULE => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_TIMING_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_FORMAT_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_VERSION_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_DATA_DARK => [0, 0, 0],
-                \chillerlan\QRCode\QRCode::M_QUIETZONE => [255, 255, 255],
+                // Finder Pattern - Dark (outer)
+                \chillerlan\QRCode\Data\QRMatrix::M_FINDER => [0, 0, 0],
+                // Finder Pattern - Dark (inner dot)
+                \chillerlan\QRCode\Data\QRMatrix::M_FINDER_DOT => [0, 0, 0],
+                // Alignment Pattern
+                \chillerlan\QRCode\Data\QRMatrix::M_ALIGNMENT => [0, 0, 0],
+                // Timing Pattern
+                \chillerlan\QRCode\Data\QRMatrix::M_TIMING => [0, 0, 0],
+                // Format Information
+                \chillerlan\QRCode\Data\QRMatrix::M_FORMAT => [0, 0, 0],
+                // Version Information
+                \chillerlan\QRCode\Data\QRMatrix::M_VERSION => [0, 0, 0],
+                // Data Module
+                \chillerlan\QRCode\Data\QRMatrix::M_DATA => [0, 0, 0],
+                // Dark Module
+                \chillerlan\QRCode\Data\QRMatrix::M_DARKMODULE => [0, 0, 0],
+                // Quiet Zone
+                \chillerlan\QRCode\Data\QRMatrix::M_QUIETZONE => [255, 255, 255],
             ],
         ]);
         
@@ -133,18 +140,12 @@ function generateQRCode($url) {
         
         // Return from cache if exists and size hasn't changed
         if (file_exists($cacheFile)) {
-            $cachedSize = getSettingValue('qrcode.last_size_' . $urlHash);
-            if ($cachedSize == $qrSize) {
                 return $cacheUrl;
-            }
         }
         
         // Generate and save QR code
         $qrcode = new \chillerlan\QRCode\QRCode($options);
         $qrcode->render($url, $cacheFile);
-        
-        // Save last used size for cache
-        updateSetting('qrcode.last_size_' . $urlHash, $qrSize);
         
         return $cacheUrl;
     } catch (Exception $e) {

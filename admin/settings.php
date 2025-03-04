@@ -34,7 +34,8 @@ try {
     // Define prefixes to exclude
     $excludedPrefixes = [
         's3.',
-        'system.'
+        'system.',
+        // 'qrcode.'
         // Add your other prefixes here
         // Example: 'aws.', 'secret.' etc.
     ];
